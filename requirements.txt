@@ -1,0 +1,6 @@
+﻿google-genai
+pydantic
+python-dotenv
+streamlit
+pywin32; sys_platform == 'win32'
+pytest
