@@ -54,7 +54,7 @@ class MockCADAdapter:
 class SolidWorksCOMAdapter:
     """
     Conector real con SolidWorks 2025 en Windows mediante automatización COM (pywin32).
-    Soporta árboles de operaciones en Español (Croquis1) e Inglés (Sketch1).
+    Utiliza la plantilla paramétrica base para inyectar medidas con precisión milimétrica.
     """
 
     def __init__(self, ruta_plantilla: str = "templates/buje_base.SLDPRT"):
@@ -72,8 +72,7 @@ class SolidWorksCOMAdapter:
                 param.SystemValue = valor_metros
                 return nombre_cota
         raise RuntimeError(
-            f"No se encontró ninguna de las cotas esperadas {candidatos} en la pieza. "
-            "Verifica que la pieza abierta en SolidWorks sea buje_base.SLDPRT."
+            f"No se encontró ninguna de las cotas esperadas {candidatos} en la pieza activa de SolidWorks."
         )
 
     def aplicar_especificacion(self, spec: EspecificacionBuje) -> Dict[str, Any]:
@@ -93,14 +92,14 @@ class SolidWorksCOMAdapter:
         except Exception as e:
             raise RuntimeError(f"No se pudo conectar con SolidWorks 2025 via COM: {e}")
 
-        # 1. Tomar el documento activo si ya está abierto en SolidWorks
+        # 1. Tomar el documento activo en SolidWorks si ya está abierto
         model = sw_app.ActiveDoc
 
-        # 2. Si no hay documento abierto, intentar abrir la plantilla desde disco
+        # 2. Si no hay nada abierto, abrir la plantilla base desde disco
         if model is None:
             if not os.path.exists(self.ruta_plantilla):
                 raise FileNotFoundError(
-                    f"No hay ninguna pieza abierta en SolidWorks ni existe la plantilla en: {self.ruta_plantilla}."
+                    f"No hay ninguna pieza abierta en SolidWorks ni se encontró la plantilla en: {self.ruta_plantilla}."
                 )
             model = sw_app.OpenDoc(self.ruta_plantilla, 1)
 
@@ -109,7 +108,7 @@ class SolidWorksCOMAdapter:
                 "No se pudo acceder a la pieza en SolidWorks. Abre templates/buje_base.SLDPRT."
             )
 
-        # Conversión obligatoria a metros (SI interno de la API de SolidWorks)
+        # Conversión obligatoria a metros (Sistema Internacional interno de SolidWorks API)
         mapa_candidatos = {
             "OD (Exterior)": (
                 ["OD@Croquis1", "D1@Croquis1", "OD@Sketch1", "D1@Sketch1"],
@@ -134,7 +133,7 @@ class SolidWorksCOMAdapter:
             cota_encontrada = self._asignar_cota_bilingue(model, candidatos, valor_m)
             cotas_actualizadas[f"{etiqueta} -> {cota_encontrada}"] = round(valor_m, 6)
 
-        # Forzar reconstrucción 3D (Ctrl + Q) y ajustar zoom en SolidWorks 2025
+        # Forzar regeneración geométrica completa (Ctrl + Q) y ajustar vista en SolidWorks 2025
         _ = model.EditRebuild3
         try:
             model.ForceRebuild3(False)
@@ -142,7 +141,7 @@ class SolidWorksCOMAdapter:
             _ = model.ForceRebuild3
         _ = model.ViewZoomtofit2
 
-        # Guardar pieza resultante en output/
+        # Guardar la pieza resultante en la carpeta output/
         output_dir = Path("output")
         output_dir.mkdir(exist_ok=True)
         ruta_salida = str((output_dir / f"{spec.nombre_pieza}.SLDPRT").resolve())
@@ -154,7 +153,7 @@ class SolidWorksCOMAdapter:
 
         return {
             "exito": True,
-            "modo": "SolidWorks 2025 COM Real (Español)",
+            "modo": "SolidWorks 2025 COM Real (Plantilla Base)",
             "mensaje": f"Pieza 3D regenerada en vivo en SolidWorks 2025 y guardada en: {ruta_salida}",
             "ruta_archivo": ruta_salida,
             "parametros_api": cotas_actualizadas,
