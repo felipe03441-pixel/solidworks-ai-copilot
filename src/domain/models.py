@@ -77,3 +77,44 @@ class EspecificacionBuje(BaseModel):
             )
 
         return self
+from typing import List
+
+
+class TramoCilindrico(BaseModel):
+    diametro_exterior_mm: float = Field(
+        ..., gt=0, le=500, description="Diámetro exterior del tramo en mm"
+    )
+    longitud_mm: float = Field(
+        ..., gt=0, le=1000, description="Longitud axial del tramo en mm"
+    )
+
+
+class EspecificacionPiezaRevolucion(BaseModel):
+    nombre_pieza: str = Field(..., min_length=3, max_length=60)
+    material: MaterialMecanizado = MaterialMecanizado.ACERO_1045
+    diametro_interior_mm: float = Field(
+        0.0, ge=0, le=450, description="0 para eje macizo; >0 para pieza hueca/buje"
+    )
+    tramos: List[TramoCilindrico] = Field(
+        ..., min_length=1, max_length=10, description="Lista de tramos de izquierda a derecha"
+    )
+    tolerancia_ajuste: str = Field("h7", description="Tolerancia ISO principal")
+    notas_mecanizado: str = Field("", description="Notas de taller")
+
+    @property
+    def longitud_total_mm(self) -> float:
+        return round(sum(t.longitud_mm for t in self.tramos), 3)
+
+    @model_validator(mode="after")
+    def validar_espesor_en_todos_los_tramos(self):
+        if self.diametro_interior_mm > 0:
+            for idx, tramo in enumerate(self.tramos, start=1):
+                espesor = (tramo.diametro_exterior_mm - self.diametro_interior_mm) / 2.0
+                if espesor < 1.5:
+                    raise ValueError(
+                        f"Tramo {idx} inválido: diámetro exterior ({tramo.diametro_exterior_mm} mm) "
+                        f"deja una pared de {espesor:.2f} mm frente al agujero de {self.diametro_interior_mm} mm "
+                        "(mínimo estructural: 1.5 mm)."
+                    )
+        return self
+        
